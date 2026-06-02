@@ -1,0 +1,44 @@
+# Chatterbox 配置文件
+# 复制此文件为 config.yaml 并填入你的配置
+
+# 语音识别引擎: whisper-api | whisper-local
+asr:
+  engine: whisper-local
+  # OpenAI Whisper API 配置
+  whisper_api:
+    api_key: ${OPENAI_API_KEY}
+    model: whisper-1
+  # 本地 Whisper 配置
+  whisper_local:
+    model_size: base
+    device: auto
+
+# LLM 对话引擎: openai | deepseek
+llm:
+  engine: deepseek
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    model: gpt-4o-mini
+  deepseek:
+    api_key: ${DEEPSEEK_API_KEY}
+    base_url: https://api.deepseek.com
+    model: deepseek-v4-flash
+
+# 语音合成引擎: edge-tts
+tts:
+  engine: edge-tts
+  edge_tts:
+    voice: en-US-JennyNeural
+
+# 对话配置
+conversation:
+  strategy: beginner  # beginner | intermediate (高级策略后续版本支持)
+
+# 音频配置
+audio:
+  sample_rate: 16000
+  channels: 1
+  chunk_duration: 30 # 每次录音最大时长（秒）
+  vad:
+    aggressiveness: 3 # VAD 灵敏度 0-3, 3最严格
+    silence_duration: 1.5 # 停顿阈值（秒）
