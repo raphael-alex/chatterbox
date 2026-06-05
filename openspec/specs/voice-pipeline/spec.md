@@ -1,4 +1,4 @@
-## ADDED Requirements
+## Requirements
 
 ### Requirement: 语音识别（ASR）
 系统 SHALL 将麦克风采集的音频转换为文本，支持中文和英文混合识别。
@@ -56,11 +56,11 @@
 - **THEN** 系统使用 Edge-TTS 进行语音合成
 
 ### Requirement: 手动启动与退出
-系统 SHALL 通过命令行手动启动，启动后持续监听。用户可通过 Ctrl+C 退出。
+系统 SHALL 通过命令行手动启动，启动后显示模式选择菜单，用户选择语音或文字模式后进入主循环。运行中可通过 `/voice` `/text` 切换模式。用户可通过 Ctrl+C 退出。
 
 #### Scenario: 启动程序
 - **WHEN** 用户执行 `python main.py`
-- **THEN** 系统初始化并开始监听麦克风
+- **THEN** 系统初始化后显示模式选择菜单（1. 语音 2. 文字 3. 退出）
 
 #### Scenario: 退出程序
 - **WHEN** 用户按下 Ctrl+C

@@ -15,6 +15,21 @@ class DeepSeekLLM(BaseLLM):
             model=self.model,
             messages=messages,
             temperature=0.7,
-            max_tokens=150,
+            max_tokens=300,
         )
-        return response.choices[0].message.content
+        choice = response.choices[0]
+        content = choice.message.content or ""
+        # 如果回复被截断，自动补全
+        if choice.finish_reason == "length" and content:
+            messages_with_reply = messages + [
+                {"role": "assistant", "content": content},
+            ]
+            continuation = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages_with_reply,
+                temperature=0.7,
+                max_tokens=150,
+            )
+            extra = continuation.choices[0].message.content or ""
+            content = content + extra
+        return content

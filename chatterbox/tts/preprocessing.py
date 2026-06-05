@@ -27,9 +27,13 @@ def clean_for_tts(text: str) -> str:
     """过滤 emoji 和非语音字符，返回适合 TTS 朗读的文本。
 
     - 移除 emoji
+    - 移除方括号标记（保留方括号内的文字内容）
+    - 移除 <SAVE_PROFILE:...> 标记
     - 合并多余空格
     - 去除首尾空白
     """
     text = _EMOJI_PATTERN.sub("", text)
+    text = text.replace("[", "").replace("]", "")
+    text = re.sub(r"<SAVE_PROFILE:.+?>", "", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()

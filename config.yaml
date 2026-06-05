@@ -34,6 +34,14 @@ tts:
 conversation:
   strategy: beginner  # beginner | intermediate (高级策略后续版本支持)
 
+# AI 角色配置
+persona:
+  name: Luna  # AI 角色名，可自定义
+
+# 输入配置
+input:
+  default_mode: voice  # voice | text
+
 # 音频配置
 audio:
   sample_rate: 16000
