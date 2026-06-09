@@ -1,24 +1,50 @@
 import re
 from datetime import date
 
-from .prompt import STRATEGIES
+from .prompt import STRATEGIES, VOCABULARY_INJECTION
+
+# 低内容回复类别（被认为是相似的回复）
+LOW_CONTENT_REPLIES = frozenset([
+    "not bad", "i'm fine", "i am fine", "im fine", "i'm good", "i am good",
+    "im good", "ok", "okay", "good", "great", "nice", "yes", "yeah", "yep",
+    "no", "nope", "sure", "whatever", "maybe", "idk", "i don't know",
+])
 
 
 class ConversationManager:
     """对话上下文管理，维护消息历史列表，支持多轮对话"""
 
     _TRANSLATION_PATTERN = re.compile(r"^\[([^\]]+)\]\s*(.+)$", re.DOTALL)
+    _STOPWORDS = frozenset([
+        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "must", "to", "of", "in", "for", "on", "with",
+        "at", "by", "from", "as", "into", "through", "during", "before", "after",
+        "and", "but", "or", "nor", "so", "yet", "both", "either", "neither",
+        "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them",
+        "my", "your", "his", "its", "our", "their",
+    ])
 
     def __init__(self, strategy: str = "beginner", persona_name: str = "Luna",
-                 user_profile=None, max_history: int = 20):
+                 user_profile=None, max_history: int = 20, english_level=None):
         self.strategy = strategy
         self.persona_name = persona_name
         self.user_profile = user_profile
 
+        # 重复检测状态
+        self._consecutive_similar_count = 0
+        self.needs_topic_switch = False
+        self._last_user_message = ""
+
         # 构建 system prompt
         template = STRATEGIES.get(strategy, STRATEGIES["beginner"])
         profile_context = self._build_profile_context()
-        self.system_prompt = template.format(name=persona_name, profile_context=profile_context)
+        vocab_injection = self._build_vocabulary_injection(english_level)
+        self.system_prompt = template.format(
+            name=persona_name,
+            profile_context=profile_context,
+            vocabulary_injection=vocab_injection,
+        )
 
         self.messages: list[dict] = [
             {"role": "system", "content": self.system_prompt}
@@ -38,6 +64,13 @@ class ConversationManager:
             desc += f" who likes {interests_str}"
         return desc + "."
 
+    def _build_vocabulary_injection(self, english_level) -> str:
+        """根据英语水平生成词汇注入提示"""
+        if english_level is None:
+            return VOCABULARY_INJECTION.get("beginner", "")
+        level = english_level.vocabulary if hasattr(english_level, 'vocabulary') else english_level
+        return VOCABULARY_INJECTION.get(level, VOCABULARY_INJECTION["beginner"])
+
     def get_greeting_prompt(self) -> str:
         """生成触发 AI 主动打招呼的 user message"""
         if self.user_profile and self.user_profile.name:
@@ -45,7 +78,18 @@ class ConversationManager:
         return "[System: A new child has just started chatting with you. Introduce yourself and ask their name!]"
 
     def add_user_message(self, text: str):
-        """添加用户消息"""
+        """添加用户消息并检测重复回复"""
+        # 重复检测
+        if self._last_user_message:
+            if self.is_similar_reply(self._last_user_message, text):
+                self._consecutive_similar_count += 1
+            else:
+                self._consecutive_similar_count = 0
+
+        if self._consecutive_similar_count >= 3:
+            self.needs_topic_switch = True
+
+        self._last_user_message = text
         self.messages.append({"role": "user", "content": text})
         self._trim_history()
 
@@ -60,6 +104,9 @@ class ConversationManager:
 
     def reset(self):
         """重置对话上下文"""
+        self._consecutive_similar_count = 0
+        self.needs_topic_switch = False
+        self._last_user_message = ""
         self.messages = [
             {"role": "system", "content": self.system_prompt}
         ]
@@ -69,6 +116,39 @@ class ConversationManager:
         if len(self.messages) > self.max_history + 1:
             # 保留 system prompt + 最近的 max_history 条消息
             self.messages = [self.messages[0]] + self.messages[-self.max_history:]
+
+    @staticmethod
+    def is_similar_reply(text1: str, text2: str) -> bool:
+        """判断两次回复是否相似。
+
+        满足以下任一条件即判定为相似：
+        - 完全相同字符串（去除首尾空格后）
+        - 字符级 Jaccard 相似度 > 0.8（去除停用词后）
+        - 同属低内容回复类别
+        """
+        t1 = text1.strip().lower()
+        t2 = text2.strip().lower()
+        if t1 == t2:
+            return True
+
+        # 低内容回复类别检查
+        if t1 in LOW_CONTENT_REPLIES and t2 in LOW_CONTENT_REPLIES:
+            return True
+
+        # Jaccard 相似度
+        def _tokens(s: str) -> frozenset:
+            return frozenset(s.split())
+
+        def _jaccard(s1: str, s2: str) -> float:
+            set1 = _tokens(s1)
+            set2 = _tokens(s2)
+            if not set1 or not set2:
+                return 0.0
+            intersection = len(set1 & set2)
+            union = len(set1 | set2)
+            return intersection / union if union > 0 else 0.0
+
+        return _jaccard(t1, t2) > 0.8
 
     @staticmethod
     def parse_translation_reply(raw: str) -> tuple[str, str]:

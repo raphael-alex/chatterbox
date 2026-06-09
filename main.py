@@ -134,12 +134,38 @@ def _process_reply(llm: BaseLLM, tts: BaseTTS, conversation: ConversationManager
     Args:
         is_text_input: True 时对中文输入额外朗读翻译部分
     """
+    # 重复引导：如果 needs_topic_switch，注入新话题引导 hint
+    topic_switch_hint = (
+        "[System note: The user has given similar responses multiple times recently. "
+        "Introduce a new topic or ask about their interests to encourage more varied expressions.]"
+    )
+    hint_message = None
+    if conversation.needs_topic_switch:
+        messages = conversation.get_messages()
+        # 追加到 system message 之后
+        system_idx = None
+        for i, m in enumerate(messages):
+            if m["role"] == "system":
+                system_idx = i
+                break
+        if system_idx is not None:
+            hint_message = {"role": "system", "content": topic_switch_hint}
+            messages.insert(system_idx + 1, hint_message)
+
     try:
         reply = llm.chat(conversation.get_messages())
     except Exception:
+        # 清理：移除注入的 hint（如果添加了）和用户消息
+        if hint_message and hint_message in conversation.messages:
+            conversation.messages.remove(hint_message)
         conversation.messages.pop()
         _speak_fallback(tts, player, recorder=recorder)
         return
+
+    # 重置重复引导标志及计数器
+    conversation.needs_topic_switch = False
+    if hint_message:
+        conversation._consecutive_similar_count = 0
 
     # 处理空回复
     if not reply or not reply.strip():
@@ -375,6 +401,89 @@ def _llm_extract_profile(llm, messages: list[str]) -> dict | None:
     return cleaned if cleaned else None
 
 
+def _assess_english_level(llm, conversation: ConversationManager):
+    """在 session 结束时评估用户英语水平。
+
+    分析最近 20 条用户消息，评估词汇复杂度、语法正确率、句型多样性，
+    返回 EnglishLevel 或 None（失败时）。
+    """
+    import json
+    import re
+    from datetime import date
+    from chatterbox.profile import EnglishLevel
+
+    # 收集最近 20 条用户消息
+    user_messages = [
+        m["content"] for m in conversation.messages
+        if m["role"] == "user" and not m["content"].startswith("[System:")
+    ][-20:]
+
+    if not user_messages:
+        return None
+
+    formatted = "\n".join(f'- "{m}"' for m in user_messages)
+    prompt_messages = [
+        {"role": "system", "content": (
+            "Analyze the user's recent English messages and assess their English level. "
+            "Return ONLY a JSON object with these fields: "
+            '{"vocabulary": "beginner|intermediate|advanced", '
+            '"grammar_accuracy": 0.0-1.0, '
+            '"sentence_diversity": "basic|intermediate|advanced"}. '
+            'vocabulary: beginner=simple words, intermediate=some advanced words, advanced=rich vocabulary. '
+            "grammar_accuracy: estimated proportion of grammatically correct sentences (0.0-1.0). "
+            "sentence_diversity: basic=mostly simple sentences, intermediate=mixed structures, advanced=complex structures. "
+            "Be conservative — err on the side of simpler assessments for children ages 5-10."
+        )},
+        {"role": "user", "content": f"Recent messages:\n{formatted}"},
+    ]
+
+    try:
+        result = llm.chat(prompt_messages, max_tokens=500)
+    except Exception:
+        return None
+
+    if not result or not result.strip():
+        return None
+
+    # 兼容 markdown code block 包裹
+    json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", result, re.DOTALL)
+    if json_match:
+        result = json_match.group(1)
+    else:
+        json_match = re.search(r"(\{.*?\})", result, re.DOTALL)
+        if json_match:
+            result = json_match.group(1)
+
+    try:
+        data = json.loads(result)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    # 验证字段值合法
+    vocabulary = data.get("vocabulary", "beginner")
+    if vocabulary not in ("beginner", "intermediate", "advanced"):
+        vocabulary = "beginner"
+    sentence_diversity = data.get("sentence_diversity", "basic")
+    if sentence_diversity not in ("basic", "intermediate", "advanced"):
+        sentence_diversity = "basic"
+
+    try:
+        grammar_accuracy = float(data.get("grammar_accuracy", 0.0))
+        grammar_accuracy = max(0.0, min(1.0, grammar_accuracy))
+    except (ValueError, TypeError):
+        grammar_accuracy = 0.0
+
+    return EnglishLevel(
+        vocabulary=vocabulary,
+        grammar_accuracy=grammar_accuracy,
+        sentence_diversity=sentence_diversity,
+        last_assessed=date.today().isoformat(),
+    )
+
+
 def _luna_greet(llm: BaseLLM, tts: BaseTTS, conversation: ConversationManager,
                 player: Player, profile_store: ProfileStore,
                 initial_mode: InputMode, recorder=None):
@@ -437,7 +546,6 @@ def run(config: dict, llm: BaseLLM, tts: BaseTTS,
         signal.signal(signal.SIGINT, signal_handler)
         recorder.start()
     else:
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
         print(f"\n⌨️  文字模式 (输入 /voice 切换到语音模式, Ctrl+C 退出)")
 
     # Luna 主动打招呼
@@ -512,8 +620,14 @@ def run(config: dict, llm: BaseLLM, tts: BaseTTS,
     finally:
         _stop_voice()
         signal.signal(signal.SIGINT, signal.SIG_DFL)
-        # 更新画像最后聊天时间
+        # Session 结束时评估英语水平
         profile = profile_store.get_default()
+        if profile and profile.is_complete and llm:
+            english_level = _assess_english_level(llm, conversation)
+            if english_level:
+                profile.english_level = english_level
+                profile_store.save_default(profile)
+        # 更新画像最后聊天时间
         if profile and profile.is_complete:
             profile_store.update_last_chat(profile)
 
@@ -536,6 +650,7 @@ def main():
         strategy=strategy,
         persona_name=persona_name,
         user_profile=profile,
+        english_level=profile.english_level if profile else None,
     )
 
     print("配置加载完成！")

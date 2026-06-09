@@ -10,12 +10,12 @@ class OpenAILLM(BaseLLM):
         self.client = OpenAI(api_key=api_key)
         self.model = model
 
-    def chat(self, messages: list[dict]) -> str:
+    def chat(self, messages: list[dict], max_tokens: int | None = None) -> str:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=0.7,
-            max_tokens=300,
+            max_tokens=max_tokens or 300,
         )
         choice = response.choices[0]
         content = choice.message.content or ""

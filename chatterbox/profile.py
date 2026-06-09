@@ -7,12 +7,40 @@ from pathlib import Path
 
 
 @dataclass
+class EnglishLevel:
+    vocabulary: str = "beginner"        # "beginner" | "intermediate" | "advanced"
+    grammar_accuracy: float = 0.0      # 0.0 - 1.0
+    sentence_diversity: str = "basic"   # "basic" | "intermediate" | "advanced"
+    last_assessed: str = ""             # ISO date
+
+    def to_dict(self) -> dict:
+        return {
+            "vocabulary": self.vocabulary,
+            "grammar_accuracy": self.grammar_accuracy,
+            "sentence_diversity": self.sentence_diversity,
+            "last_assessed": self.last_assessed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "EnglishLevel":
+        return cls(
+            vocabulary=data.get("vocabulary", "beginner"),
+            grammar_accuracy=float(data.get("grammar_accuracy", 0.0)),
+            sentence_diversity=data.get("sentence_diversity", "basic"),
+            last_assessed=data.get("last_assessed", ""),
+        )
+
+
+@dataclass
 class UserProfile:
     name: str = ""
     age: int | None = None
     interests: list[str] = field(default_factory=list)
     created_at: str = ""
     last_chat: str = ""
+    safety_events: list = field(default_factory=list)  # [{category, keyword, user_input, timestamp}, ...]
+    english_level: EnglishLevel | None = None
+    repetition_count: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -21,16 +49,25 @@ class UserProfile:
             "interests": self.interests,
             "created_at": self.created_at,
             "last_chat": self.last_chat,
+            "safety_events": self.safety_events,
+            "english_level": self.english_level.to_dict() if self.english_level else None,
+            "repetition_count": self.repetition_count,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "UserProfile":
+        english_level = None
+        if data.get("english_level"):
+            english_level = EnglishLevel.from_dict(data["english_level"])
         return cls(
             name=data.get("name", ""),
             age=data.get("age"),
             interests=data.get("interests", []),
             created_at=data.get("created_at", ""),
             last_chat=data.get("last_chat", ""),
+            safety_events=data.get("safety_events", []),
+            english_level=english_level,
+            repetition_count=data.get("repetition_count", 0),
         )
 
     @property
