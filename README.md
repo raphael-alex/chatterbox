@@ -11,11 +11,6 @@ When your child speaks (in Chinese or English), Chatterbox:
 2. Translates and responds in natural, child-friendly English
 3. Speaks the English response aloud
 
-```
-Child: "我喜欢恐龙"
-Chatterbox: "Oh, you like dinosaurs! Which one is your favorite?" 🔊
-```
-
 ## Quick Start
 
 ### Prerequisites
@@ -63,19 +58,6 @@ Edit `config.yaml` to customize:
 | TTS voice | Edge-TTS voice names | `en-US-JennyNeural` |
 | VAD silence duration | seconds | `1.5` |
 
-### Using DeepSeek instead of OpenAI
-
-```yaml
-llm:
-  engine: deepseek
-  deepseek:
-    api_key: ${DEEPSEEK_API_KEY}
-```
-
-```bash
-export DEEPSEEK_API_KEY="your-key"
-```
-
 ### Using local Whisper (offline ASR)
 
 ```yaml
@@ -93,14 +75,6 @@ Microphone → VAD → ASR → LLM → TTS → Speaker
 ```
 
 All components use an adapter pattern — swap engines via config without code changes.
-
-## Roadmap
-
-- **v1.0** — Minimal loop (current)
-- **v1.1** — Wake word ("hello") + age/level config
-- **v1.2** — Dual mode (AI buddy / Translation assistant)
-- **v1.3** — Vocabulary tracking
-- **v2.0** — Voice cloning (your voice speaks English!) + Pro cloud service
 
 ## License
 
