@@ -22,7 +22,7 @@ Chatterbox: "Oh, you like dinosaurs! Which one is your favorite?" 🔊
 
 - Python 3.10+
 - A microphone
-- An OpenAI API key (or DeepSeek API key)
+- An DeepSeek API key
 
 ### Install
 
@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 ```bash
 # Set your API key
-export OPENAI_API_KEY="sk-..."
+export DEEPSEEK_API_KEY="sk-..."
 
 # Or copy and edit config.yaml
 cp config.yaml my_config.yaml
