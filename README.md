@@ -22,7 +22,7 @@ When your child speaks (in Chinese or English), Chatterbox:
 ### Install
 
 ```bash
-git clone https://github.com/your-username/chatterbox.git
+git clone https://github.com/raphael-alex/chatterbox.git
 cd chatterbox
 pip install -r requirements.txt
 ```
