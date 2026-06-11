@@ -17,7 +17,7 @@ When your child speaks (in Chinese or English), Chatterbox:
 
 - Python 3.10+
 - A microphone
-- An DeepSeek API key
+- A DeepSeek API key
 
 ### Install
 
